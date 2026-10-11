@@ -14,6 +14,7 @@ jobs:
         with:
           repository: shapely/shapely
           ref: 5fb639d1056888d135fe56bfaf750c9648addeec
+          fetch-depth: 0
           path: source
       - uses: actions/setup-python@v6
         with:

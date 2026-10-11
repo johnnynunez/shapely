@@ -5,6 +5,10 @@ from shapely.geometry import LineString, Point, box
 from shapely.strtree import STRtree
 
 
+def test_exact_release_version():
+    assert shapely.__version__ == '2.1.2'
+
+
 def test_intersection_union_area():
     a, b = box(0, 0, 2, 2), box(1, 1, 3, 3)
     assert a.intersection(b).area == pytest.approx(1)

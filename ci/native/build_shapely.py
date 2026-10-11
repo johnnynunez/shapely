@@ -1,5 +1,7 @@
 """Isolated native Windows ARM64 Shapely 2.1.2 acceptance."""
 import json
+import email
+import zipfile
 import os
 from pathlib import Path
 import platform
@@ -44,12 +46,15 @@ for name in ('LICENSE_GEOS', 'LICENSE_win32'):
     shutil.copy(source/'ci/wheelbuilder'/name, source/name)
 run([sys.executable, '-m', 'build', '--wheel', '--outdir', out/'raw'], source)
 wheel = next((out/'raw').glob('*.whl'))
+with zipfile.ZipFile(wheel) as z:
+    metadata = email.message_from_bytes(z.read(next(n for n in z.namelist() if n.endswith('.dist-info/METADATA'))))
+    assert metadata['Version'] == '2.1.2', metadata['Version']
 run([sys.executable, '-m', 'delvewheel', 'repair', '--add-path', work/'geos-install/bin', '-w', out/'wheels', wheel])
 run([sys.executable, root/'ci/native/wheel_audit.py', out/'wheels', out/'wheel-audit.json'])
 run([sys.executable, '-m', 'venv', work/'test-venv'])
 py = work/'test-venv/Scripts/python.exe'
 wheel = next((out/'wheels').glob('*.whl'))
-run([py, '-m', 'pip', 'install', wheel, 'pytest', 'pytest-cov', 'scipy-doctest'])
+run([py, '-m', 'pip', 'install', wheel, 'pytest', 'pytest-cov', 'scipy-doctest', 'matplotlib'])
 run([py, '-m', 'pip', 'freeze'])
 run([py, '-m', 'pytest', '--pyargs', 'shapely.tests', '-ra', f'--junitxml={out / "upstream.xml"}'])
 run([py, '-m', 'pytest', root/'ci/native/test_shapely_oracles.py', '-v', f'--junitxml={out / "oracles.xml"}'])
