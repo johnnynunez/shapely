@@ -1,0 +1,51 @@
+name: Shapely 2.1.2 exact Lab NumPy 2.5.1
+on:
+  push:
+    branches: [ci/native-arm64-shapely-numpy251]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  installed-wheel:
+    runs-on: windows-11-arm
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+          architecture: arm64
+      - uses: actions/download-artifact@v4
+        with:
+          repository: johnnynunez/shapely
+          run-id: '38181824594'
+          github-token: ${{ github.token }}
+          name: shapely-2.1.2-cp312-win-arm64
+          path: ${{ runner.temp }}/producer
+      - name: Verify and test exact installed wheel with locked NumPy
+        shell: pwsh
+        working-directory: ${{ runner.temp }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $env:PIP_CACHE_DIR = "$env:RUNNER_TEMP/pinned-numpy-cache"
+          $wheels = @(Get-ChildItem "$env:RUNNER_TEMP/producer/wheels/*.whl")
+          if ($wheels.Count -ne 1) { throw 'Expected one repaired wheel' }
+          $wheel = $wheels[0]
+          if ((Get-FileHash $wheel.FullName -Algorithm SHA256).Hash.ToLower() -ne '814767ca38bc31649457df21d42789b5901a96464ad53c20e657671ec6f058e2') { throw 'Wheel hash mismatch' }
+          python -m pip install $wheel.FullName numpy==2.5.1 pytest pytest-cov scipy-doctest matplotlib
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python -c "import sysconfig,shapely,numpy; assert sysconfig.get_platform()=='win-arm64'; assert shapely.__version__=='2.1.2'; assert numpy.__version__=='2.5.1'"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          New-Item -ItemType Directory -Force "$env:GITHUB_WORKSPACE/pin-evidence"
+          python -m pip freeze | Out-File "$env:GITHUB_WORKSPACE/pin-evidence/freeze.txt"
+          python -m pytest --pyargs shapely.tests -ra --junitxml="$env:GITHUB_WORKSPACE/pin-evidence/upstream.xml"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python -m pytest "$env:GITHUB_WORKSPACE/ci/native/test_shapely_oracles.py" -v --junitxml="$env:GITHUB_WORKSPACE/pin-evidence/oracles.xml"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: shapely-numpy251-tests
+          path: ${{ github.workspace }}/pin-evidence
+          if-no-files-found: error
+          retention-days: 14
